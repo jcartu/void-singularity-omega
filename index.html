@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>VOID SINGULARITY: OMEGA</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #02030a; overflow: hidden; }
+    #app { position: fixed; inset: 0; }
+    canvas#stage { display: block; width: 100%; height: 100%; touch-action: none; }
+    /* Boot overlay — replaced by the real loader in SPRINT-01 */
+    #boot {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      background: radial-gradient(120% 120% at 50% 40%, #0a0f24 0%, #02030a 70%);
+      color: #8be9fd; font-family: ui-monospace, "JetBrains Mono", "Courier New", monospace;
+      letter-spacing: 0.35em; text-transform: uppercase; transition: opacity .6s ease;
+    }
+    #boot .title { font-size: clamp(18px, 4vw, 34px); text-shadow: 0 0 24px #1b9aaa; }
+    #boot .sub { margin-top: 14px; font-size: 11px; color: #4a6a78; letter-spacing: .5em; }
+    #boot.hidden { opacity: 0; pointer-events: none; }
+    #fatal { display:none; position:fixed; inset:0; place-items:center; background:#0a0208; color:#ff7a90;
+      font-family: ui-monospace, monospace; padding: 24px; text-align:center; line-height:1.6; }
+    #fatal.show { display:grid; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="stage"></canvas>
+  </div>
+  <div id="boot">
+    <div>
+      <div class="title">Void Singularity</div>
+      <div class="sub">// OMEGA — initializing event horizon</div>
+    </div>
+  </div>
+  <div id="fatal"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
