@@ -11,6 +11,7 @@
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:perf": "node scripts/perf-harness.mjs",
     "test:selfplay": "node scripts/selfplay-bot.mjs",
+    "test:determinism": "node scripts/determinism-test.mjs",
     "audit:opus": "bash scripts/opus-audit.sh"
   },
   "dependencies": {

@@ -7,6 +7,7 @@ import { Loop } from './engine/loop.js';
 import { Input } from './engine/input.js';
 import { World } from './game/world.js';
 import { Profiler } from './engine/profiler.js';
+import { runStorm } from './scenarios/storm.js';
 
 const bootEl = document.getElementById('boot');
 const fatalEl = document.getElementById('fatal');
@@ -49,6 +50,7 @@ async function main() {
     },
   });
   profiler.loop = loop;
+    world.hud.profiler = profiler;
 
   // Reveal the stage once the first frame is ready.
   world.onFirstFrame(() => {
@@ -59,7 +61,7 @@ async function main() {
   world.resize(window.innerWidth, window.innerHeight);
 
   // Expose for the perf harness + opus capture scripts.
-  window.__OMEGA__ = { world, renderer, loop, cap, profiler };
+  window.__OMEGA__ = { world, renderer, loop, cap, profiler, scenarios: { runStorm } };
 
   loop.start();
 }

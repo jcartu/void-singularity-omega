@@ -1,0 +1,351 @@
+{
+  "schema": "omega.perf-harness.report",
+  "version": 2,
+  "scenario": "storm",
+  "url": "http://localhost:4173",
+  "startedAt": "2026-05-28T11:11:15.311Z",
+  "durationMs": 5000,
+  "warmupMs": 1500,
+  "samples": [
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779966687411,
+      "sampleWindow": 600,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 812,
+        "fps": 60,
+        "frameMs": 0,
+        "avgMs": 0.004,
+        "p50Ms": 0,
+        "p99Ms": 0.1,
+        "drawCalls": 11354,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 12.39,
+        "heapLimitMB": 4096
+      }
+    }
+  ],
+  "final": {
+    "schema": "omega.profiler.trace",
+    "version": 1,
+    "timestamp": 1779966687411,
+    "sampleWindow": 600,
+    "capability": {
+      "webgpu": true,
+      "webgl2": true,
+      "tier": "ultra"
+    },
+    "metrics": {
+      "frame": 812,
+      "fps": 60,
+      "frameMs": 0,
+      "avgMs": 0.004,
+      "p50Ms": 0,
+      "p99Ms": 0.1,
+      "drawCalls": 11354,
+      "triangles": 0,
+      "programs": 0,
+      "heapMB": 12.39,
+      "heapLimitMB": 4096
+    }
+  },
+  "summary": {
+    "fpsAvg": 60,
+    "fpsMin": 60,
+    "p99MsMax": 0.1,
+    "heapMBMax": 12.39,
+    "drawCalls": 11354,
+    "triangles": 0
+  },
+  "storm": {
+    "schema": "omega.perf-harness.storm",
+    "deviceTier": "ultra",
+    "perTier": {
+      "ultra": {
+        "profile": {
+          "bullets": 16000,
+          "enemies": 200,
+          "targetFps": 60,
+          "budgetMs": 16.67
+        },
+        "result": {
+          "schema": "omega.scenario.storm",
+          "config": {
+            "bullets": 16000,
+            "enemies": 200,
+            "durationMs": 3000,
+            "worldExtent": 80,
+            "cellSize": 3,
+            "bulletSpeed": 28,
+            "bulletTTL": 12
+          },
+          "frames": 180,
+          "bulletsAvg": 15863.31111111111,
+          "bulletsPeak": 15912,
+          "hits": 18544,
+          "despawns": 40468,
+          "phases": {
+            "integrate": {
+              "n": 180,
+              "avg": 0.8544444440967507,
+              "p50": 0.7999999970197678,
+              "p99": 2.2000000029802322,
+              "max": 3.5
+            },
+            "grid": {
+              "n": 180,
+              "avg": 0.38000000015729,
+              "p50": 0.3999999985098839,
+              "p99": 0.6000000014901161,
+              "max": 1.8999999985098839
+            },
+            "collide": {
+              "n": 180,
+              "avg": 0.23388888914552,
+              "p50": 0.20000000298023224,
+              "p99": 0.3999999985098839,
+              "max": 2.399999998509884
+            },
+            "total": {
+              "n": 180,
+              "avg": 1.4705555556548966,
+              "p50": 1.3999999985098839,
+              "p99": 4,
+              "max": 6.5
+            }
+          }
+        },
+        "derived": {
+          "fpsAvg": 680.02,
+          "fpsP1": 250,
+          "budgetMs": 16.67,
+          "overBudget": 0,
+          "pass": true,
+          "bottleneck": {
+            "phase": "integrate",
+            "share": 58.2,
+            "avgMs": 0.854,
+            "overBudgetMs": 0,
+            "hint": "gravity/integrate loop dominates — consider skip-bands, fewer fixed steps, or SoA SIMD"
+          }
+        }
+      },
+      "high": {
+        "profile": {
+          "bullets": 12000,
+          "enemies": 160,
+          "targetFps": 60,
+          "budgetMs": 16.67
+        },
+        "result": {
+          "schema": "omega.scenario.storm",
+          "config": {
+            "bullets": 12000,
+            "enemies": 160,
+            "durationMs": 3000,
+            "worldExtent": 80,
+            "cellSize": 3,
+            "bulletSpeed": 28,
+            "bulletTTL": 12
+          },
+          "frames": 180,
+          "bulletsAvg": 11912.733333333334,
+          "bulletsPeak": 11952,
+          "hits": 11299,
+          "despawns": 27619,
+          "phases": {
+            "integrate": {
+              "n": 180,
+              "avg": 0.7277777775294251,
+              "p50": 0.6000000014901161,
+              "p99": 5.100000001490116,
+              "max": 5.800000004470348
+            },
+            "grid": {
+              "n": 180,
+              "avg": 0.31166666704747414,
+              "p50": 0.29999999701976776,
+              "p99": 1.7999999970197678,
+              "max": 1.8999999985098839
+            },
+            "collide": {
+              "n": 180,
+              "avg": 0.16611111102004847,
+              "p50": 0.19999999552965164,
+              "p99": 0.30000000447034836,
+              "max": 1.3000000044703484
+            },
+            "total": {
+              "n": 180,
+              "avg": 1.2066666667246155,
+              "p50": 1.0999999940395355,
+              "p99": 7.299999997019768,
+              "max": 8.900000005960464
+            }
+          }
+        },
+        "derived": {
+          "fpsAvg": 828.73,
+          "fpsP1": 136.99,
+          "budgetMs": 16.67,
+          "overBudget": 0,
+          "pass": true,
+          "bottleneck": {
+            "phase": "integrate",
+            "share": 60.4,
+            "avgMs": 0.728,
+            "overBudgetMs": 0,
+            "hint": "gravity/integrate loop dominates — consider skip-bands, fewer fixed steps, or SoA SIMD"
+          }
+        }
+      },
+      "medium": {
+        "profile": {
+          "bullets": 8000,
+          "enemies": 120,
+          "targetFps": 45,
+          "budgetMs": 22.22
+        },
+        "result": {
+          "schema": "omega.scenario.storm",
+          "config": {
+            "bullets": 8000,
+            "enemies": 120,
+            "durationMs": 3000,
+            "worldExtent": 80,
+            "cellSize": 3,
+            "bulletSpeed": 28,
+            "bulletTTL": 12
+          },
+          "frames": 180,
+          "bulletsAvg": 7948.155555555555,
+          "bulletsPeak": 7978,
+          "hits": 6526,
+          "despawns": 17266,
+          "phases": {
+            "integrate": {
+              "n": 180,
+              "avg": 0.5083333334575096,
+              "p50": 0.4000000059604645,
+              "p99": 3.899999998509884,
+              "max": 4.899999998509884
+            },
+            "grid": {
+              "n": 180,
+              "avg": 0.22222222201526165,
+              "p50": 0.20000000298023224,
+              "p99": 0.4000000059604645,
+              "max": 0.8999999985098839
+            },
+            "collide": {
+              "n": 180,
+              "avg": 0.11500000001655684,
+              "p50": 0.10000000149011612,
+              "p99": 0.6000000014901161,
+              "max": 0.7999999970197678
+            },
+            "total": {
+              "n": 180,
+              "avg": 0.8477777777446641,
+              "p50": 0.7000000029802322,
+              "p99": 5.5,
+              "max": 5.5999999940395355
+            }
+          }
+        },
+        "derived": {
+          "fpsAvg": 1179.55,
+          "fpsP1": 181.82,
+          "budgetMs": 22.22,
+          "overBudget": 0,
+          "pass": true,
+          "bottleneck": {
+            "phase": "integrate",
+            "share": 60.1,
+            "avgMs": 0.508,
+            "overBudgetMs": 0,
+            "hint": "gravity/integrate loop dominates — consider skip-bands, fewer fixed steps, or SoA SIMD"
+          }
+        }
+      },
+      "low": {
+        "profile": {
+          "bullets": 4000,
+          "enemies": 60,
+          "targetFps": 30,
+          "budgetMs": 33.33
+        },
+        "result": {
+          "schema": "omega.scenario.storm",
+          "config": {
+            "bullets": 4000,
+            "enemies": 60,
+            "durationMs": 3000,
+            "worldExtent": 80,
+            "cellSize": 3,
+            "bulletSpeed": 28,
+            "bulletTTL": 12
+          },
+          "frames": 180,
+          "bulletsAvg": 3983.75,
+          "bulletsPeak": 3997,
+          "hits": 1616,
+          "despawns": 6906,
+          "phases": {
+            "integrate": {
+              "n": 180,
+              "avg": 0.23277777801785204,
+              "p50": 0.20000000298023224,
+              "p99": 0.4000000059604645,
+              "max": 1.1000000014901161
+            },
+            "grid": {
+              "n": 180,
+              "avg": 0.12277777770327197,
+              "p50": 0.10000000149011612,
+              "p99": 0.29999999701976776,
+              "max": 0.30000000447034836
+            },
+            "collide": {
+              "n": 180,
+              "avg": 0.06055555542310079,
+              "p50": 0,
+              "p99": 0.30000000447034836,
+              "max": 0.30000000447034836
+            },
+            "total": {
+              "n": 180,
+              "avg": 0.4166666667080588,
+              "p50": 0.3999999985098839,
+              "p99": 0.8999999985098839,
+              "max": 1.7000000029802322
+            }
+          }
+        },
+        "derived": {
+          "fpsAvg": 2400,
+          "fpsP1": 1111.11,
+          "budgetMs": 33.33,
+          "overBudget": 0,
+          "pass": true,
+          "bottleneck": {
+            "phase": "integrate",
+            "share": 55.9,
+            "avgMs": 0.233,
+            "overBudgetMs": 0,
+            "hint": "gravity/integrate loop dominates — consider skip-bands, fewer fixed steps, or SoA SIMD"
+          }
+        }
+      }
+    },
+    "breaches": [],
+    "verdict": "all-tiers-pass"
+  }
+}

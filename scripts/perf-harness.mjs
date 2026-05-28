@@ -29,6 +29,16 @@ const DURATION_MS = Number(args.duration ?? 5000);
 const WARMUP_MS   = Number(args.warmup   ?? 2000);
 const OUT_PATH    = resolve(ROOT, args.out ?? 'artifacts/perf.json');
 const EXPLICIT_URL = args.url ?? null;
+const SCENARIO    = String(args.scenario ?? 'idle'); // 'idle' | 'storm'
+
+// Per-tier load presets for the storm scenario. Budget = 1000/targetFps in ms.
+const TIER_PROFILES = {
+  ultra:  { bullets: 16000, enemies: 200, targetFps: 60, budgetMs: 16.67 },
+  high:   { bullets: 12000, enemies: 160, targetFps: 60, budgetMs: 16.67 },
+  medium: { bullets:  8000, enemies: 120, targetFps: 45, budgetMs: 22.22 },
+  low:    { bullets:  4000, enemies:  60, targetFps: 30, budgetMs: 33.33 },
+};
+const TIERS = ['ultra', 'high', 'medium', 'low'];
 
 function parseArgs(argv) {
   const out = {};
@@ -144,12 +154,19 @@ async function main() {
     log(`warmup ${WARMUP_MS}ms`);
     await page.waitForTimeout(WARMUP_MS);
 
-    log(`sampling ${DURATION_MS}ms`);
     const t0 = Date.now();
-    while (Date.now() - t0 < DURATION_MS) {
-      const trace = await page.evaluate(() => window.__OMEGA__.profiler.emit());
-      traces.push(trace);
-      await page.waitForTimeout(500);
+    let stormReport = null;
+    if (SCENARIO === 'storm') {
+      log('running storm scenario sweep across tiers:', TIERS.join(', '));
+      stormReport = await runStormSweep(page);
+    } else {
+      log(`sampling ${DURATION_MS}ms`);
+      const t0s = t0;
+      while (Date.now() - t0s < DURATION_MS) {
+        const trace = await page.evaluate(() => window.__OMEGA__.profiler.emit());
+        traces.push(trace);
+        await page.waitForTimeout(500);
+      }
     }
 
     // Final consolidated trace.
@@ -167,7 +184,8 @@ async function main() {
 
     const report = {
       schema: 'omega.perf-harness.report',
-      version: 1,
+      version: 2,
+      scenario: SCENARIO,
       url,
       startedAt: new Date(t0).toISOString(),
       durationMs: DURATION_MS,
@@ -175,12 +193,14 @@ async function main() {
       samples: traces,
       final,
       summary: summarize(traces),
+      storm: stormReport,
     };
 
     await mkdir(dirname(OUT_PATH), { recursive: true });
     await writeFile(OUT_PATH, JSON.stringify(report, null, 2));
     log('wrote', OUT_PATH);
     log('summary:', JSON.stringify(report.summary));
+    if (stormReport) log('storm verdict:', stormReport.verdict);
   } catch (err) {
     console.error('[perf:ERROR]', err?.stack ?? err);
     exitCode = 1;
@@ -211,5 +231,88 @@ function summarize(traces) {
   };
 }
 function avg(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0; }
+
+async function runStormSweep(page) {
+  // Sanity: the runStorm helper must be wired in by main.js.
+  const hasScenario = await page.evaluate(() => !!window.__OMEGA__?.scenarios?.runStorm);
+  if (!hasScenario) die('runStorm scenario not exposed on window.__OMEGA__.scenarios');
+
+  const tier = await page.evaluate(() => window.__OMEGA__?.cap?.tier ?? null);
+  log('detected device tier:', tier);
+
+  const perTier = {};
+  for (const t of TIERS) {
+    const profile = TIER_PROFILES[t];
+    log(`storm[${t}] bullets=${profile.bullets} enemies=${profile.enemies} target=${profile.targetFps}fps`);
+    // Force GC between tiers so heap noise doesn't leak across runs.
+    await page.evaluate(() => { try { window.gc && window.gc(); } catch {} });
+    const result = await page.evaluate(async (opts) => {
+      return await window.__OMEGA__.scenarios.runStorm(opts);
+    }, { bullets: profile.bullets, enemies: profile.enemies, durationMs: 3000 });
+
+    const totalAvg = result?.phases?.total?.avg ?? 0;
+    const totalP99 = result?.phases?.total?.p99 ?? 0;
+    const fpsAvg = totalAvg > 0 ? 1000 / totalAvg : 0;
+    const fpsP1  = totalP99 > 0 ? 1000 / totalP99 : 0;
+    const pass = fpsP1 >= profile.targetFps;
+
+    perTier[t] = {
+      profile,
+      result,
+      derived: {
+        fpsAvg: round(fpsAvg, 2),
+        fpsP1: round(fpsP1, 2),
+        budgetMs: profile.budgetMs,
+        overBudget: round(Math.max(0, totalP99 - profile.budgetMs), 3),
+        pass,
+        bottleneck: identifyBottleneck(result, profile),
+      },
+    };
+    log(`  -> avg=${fpsAvg.toFixed(1)}fps p1%=${fpsP1.toFixed(1)}fps`, pass ? 'OK' : 'BREACH');
+    if (!pass) log(`     bottleneck: ${perTier[t].derived.bottleneck.phase} (${perTier[t].derived.bottleneck.share}% of frame)`);
+  }
+
+  const breaches = Object.entries(perTier).filter(([, r]) => !r.derived.pass).map(([t]) => t);
+  return {
+    schema: 'omega.perf-harness.storm',
+    deviceTier: tier,
+    perTier,
+    breaches,
+    verdict: breaches.length === 0 ? 'all-tiers-pass' : `breach:${breaches.join(',')}`,
+  };
+}
+
+function identifyBottleneck(result, profile) {
+  const phases = result?.phases ?? {};
+  // Compare avg cost of named phases — pick the biggest contributor.
+  const named = ['integrate', 'grid', 'collide'];
+  let total = 0;
+  for (const p of named) total += phases[p]?.avg ?? 0;
+  let topName = 'none', topVal = -1;
+  for (const p of named) {
+    const v = phases[p]?.avg ?? 0;
+    if (v > topVal) { topVal = v; topName = p; }
+  }
+  const share = total > 0 ? round((topVal / total) * 100, 1) : 0;
+  const totalP99 = phases.total?.p99 ?? 0;
+  return {
+    phase: topName,
+    share,
+    avgMs: round(topVal, 3),
+    overBudgetMs: round(Math.max(0, totalP99 - profile.budgetMs), 3),
+    hint: hintFor(topName),
+  };
+}
+
+function hintFor(phase) {
+  switch (phase) {
+    case 'collide': return 'broadphase grid scan dominates — consider larger cells, target AABB pre-pass, or SIMD/wasm';
+    case 'integrate': return 'gravity/integrate loop dominates — consider skip-bands, fewer fixed steps, or SoA SIMD';
+    case 'grid': return 'grid rebuild dominates — consider incremental cell updates instead of full rebuild';
+    default: return 'no dominant phase';
+  }
+}
+
+function round(v, p) { if (!Number.isFinite(v)) return 0; const m = 10 ** p; return Math.round(v * m) / m; }
 
 main().catch((e) => die(e?.stack ?? String(e)));
