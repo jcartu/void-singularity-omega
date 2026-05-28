@@ -33,6 +33,7 @@
 
 import { ENEMY_TYPES } from './enemies/types.js';
 import { RNG } from '../engine/rng.js';
+import { getBossForBiome } from './bosses/index.js';
 
 // ---- Biome table ----------------------------------------------------------
 // Each biome owns 5 waves + a boss slot at the end. Stat multipliers stack
@@ -288,6 +289,30 @@ export class WaveDirector {
 
   /** Optional manual hook; bus subscription already credits kills automatically. */
   onEnemyKilled(/* type */) { /* no-op: handled via 'enemy:death' subscription */ }
+
+  /** Current biome index (0-based). */
+  getBiomeIndex() { return this.biomeIndex; }
+
+  /** Total number of biomes in the run. */
+  getBiomeCount() { return BIOMES.length; }
+
+  /** BOSS_DEF for the current biome, via the boss registry. Null if unmapped. */
+  getBossDef() {
+    const biome = BIOMES[this.biomeIndex];
+    return biome ? getBossForBiome(biome.id) : null;
+  }
+
+  /**
+   * Debug / scripted jump to a biome by id. Resets wave index inside that
+   * biome and emits no events — primarily for tests. Returns true on success.
+   */
+  setBiome(biomeId) {
+    const idx = BIOMES.findIndex((b) => b.id === biomeId);
+    if (idx < 0) return false;
+    this.biomeIndex = idx;
+    this.waveIndex = 0;
+    return true;
+  }
 
   /** Detach bus listeners. */
   dispose() {

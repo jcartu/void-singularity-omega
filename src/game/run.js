@@ -58,7 +58,7 @@ export class RunStateMachine {
    * @param {import('../engine/events.js').EventBus} [deps.bus]
    * @param {object} [deps.rng]
    */
-  constructor({ ship, director, upgrades, economy, bus = null, rng = null } = {}) {
+  constructor({ ship, director, upgrades, economy, bus = null, rng = null, externalBoss = false } = {}) {
     if (!director) throw new Error('RunStateMachine: director required');
     if (!upgrades) throw new Error('RunStateMachine: upgrades required');
     if (!economy || !economy.currency || !economy.shop) {
@@ -71,6 +71,10 @@ export class RunStateMachine {
     this.shop = economy.shop;
     this.bus = bus;
     this.rng = rng;
+    // When true, an external BossManager (see boss-manager.js) drives boss
+    // lifecycle and signals 'boss:death' → director.completeBoss(). The RSM
+    // suppresses its placeholder timer in that mode.
+    this.externalBoss = !!externalBoss;
 
     this.state = RUN_STATE.MENU;
     this._prevState = RUN_STATE.MENU;
@@ -144,6 +148,7 @@ export class RunStateMachine {
         // Boss placeholder: auto-resolve after BOSS_PLACEHOLDER_DURATION so the
         // run loop is testable end-to-end without S06 boss code.
         if (this.state === RUN_STATE.BOSS_FIGHT
+            && !this.externalBoss
             && this._timer >= BOSS_PLACEHOLDER_DURATION) {
           this.director.completeBoss();
         }

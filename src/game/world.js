@@ -27,7 +27,10 @@ import { EventBus } from '../engine/events.js';
 import { WaveDirector } from './director.js';
 import { UpgradeManager } from './upgrades.js';
 import { createEconomy } from './economy.js';
-import { RunStateMachine } from './run.js';
+import { RunStateMachine, RUN_STATE } from './run.js';
+import { BossManager } from './boss-manager.js';
+import { BiomeSkins } from '../render/biome-skins.js';
+import { VFXManager } from '../render/vfx.js';
 import { ParticleManager } from '../render/particles.js';
 import { AudioHooks } from './audio-hooks.js';
 
@@ -213,8 +216,60 @@ export class World {
       economy: this.economy,
       bus: this.bus,
       rng: this.rng.fx,
+      rng: this.rng.fx,
+      externalBoss: true,
     });
 
+    // ── Boss + biome wiring (WO-06-G1) ────────────────────────────────────
+    // BossManager spawns on 'boss:encounter' and signals 'boss:death' which
+    // we forward to director.completeBoss() so the run advances biome.
+    this.bossManager = null;
+    this._unsubBossEncounter = this.bus.on('boss:encounter', (payload) => {
+      this._spawnBoss(payload);
+    });
+    this._unsubBossDeath = this.bus.on('boss:death', () => {
+      // BossInstance fires this once HP hits 0. Disposing here keeps the
+      // manager idempotent across rapid retries; director.completeBoss()
+      // advances the run-state.
+      if (this.bossManager) {
+        this.bossManager.dispose();
+        this.bossManager = null;
+      }
+      this.director.completeBoss();
+    });
+
+    // Biome visual skin — best-effort. Requires VFXManager + ParticleManager
+    // + PostFX. If construction fails (e.g. missing tier-specific assets) we
+    // log and continue; gameplay does not depend on the skin.
+    this.vfx = null;
+    this.biomeSkins = null;
+    try {
+      this.vfx = new VFXManager({
+        renderer: this.renderer,
+        scene: this.scene,
+        camera: this.camera,
+        bus: this.bus,
+        tier: this.cap?.tier ?? 'medium',
+      });
+      this.biomeSkins = new BiomeSkins({
+        postfx: this.fx,
+        vfx: this.vfx,
+        particles: this.particles,
+        renderer: this.renderer,
+        scene: this.scene,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[world] biome skins unavailable:', err?.message ?? err);
+      this.biomeSkins = null;
+    }
+    // On every biome:enter event from the RSM, swap the skin.
+    this._unsubBiomeEnter = this.bus.on('biome:enter', (payload) => {
+      const id = payload?.biome ?? null;
+      if (this.biomeSkins && id) {
+        try { this.biomeSkins.setBiome(id); } catch { /* noop */ }
+      }
+    });
     // Subscribe to run-level signals so the game pauses on win/lose. The HUD
     // will render the actual summary panels (WO-03-U2); world.js only owns
     // the gameplay-pause toggle here.
@@ -238,6 +293,40 @@ export class World {
       director: this.director,
       ship: this.ship,
     });
+  }
+
+  /**
+   * Construct a BossManager from the boss def registered for the current
+   * director biome and spawn it near the singularity. Called when the
+   * director emits 'boss:encounter'.
+   * @param {object} payload boss:encounter event payload
+   */
+  _spawnBoss(payload) {
+    if (this.bossManager) {
+      this.bossManager.dispose();
+      this.bossManager = null;
+    }
+    const def = this.director.getBossDef ? this.director.getBossDef() : null;
+    if (!def) {
+      // No boss for this biome — auto-resolve so the run can advance.
+      // eslint-disable-next-line no-console
+      console.warn('[world] no boss def for biome', payload?.biome, '— auto-completing');
+      this.director.completeBoss();
+      return;
+    }
+    this.bossManager = new BossManager({
+      def,
+      rng: this.rng.fx,
+      bus: this.bus,
+      projectilePool: this.projectilePool,
+      enemyManager: this.enemies,
+      player: this.ship,
+      gravity: this.gravitySource,
+    });
+    // Spawn at the gravity well so the encounter is framed by the camera.
+    const cx = this.gravitySource.position.x;
+    const cz = this.gravitySource.position.z;
+    this.bossManager.spawn([cx, 0, cz]);
   }
 
   _starfield(count, radius) {
@@ -292,6 +381,10 @@ export class World {
     this.weapons.update(simDt);
     if (this.enemies) this.enemies.update(simDt, performance.now() * 0.001);
     if (this.runState && !this._runPaused) this.runState.update(simDt);
+    if (this.bossManager && !this._runPaused) {
+      this.bossManager.update(simDt, this.ship?.position ?? null);
+    }
+    if (this.biomeSkins) this.biomeSkins.update(dt);
     this.enemyRenderers.update();
     if (this.particles) this.particles.update(simDt);
     if (this.combo) this.combo.update(simDt);
