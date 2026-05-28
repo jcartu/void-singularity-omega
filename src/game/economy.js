@@ -19,21 +19,20 @@
 //   'shop:closed'      { spent }
 //   'shop:purchased'   { itemId, price, item }
 
-/** Base reward per enemy archetype. Tunable for S07 balance. */
-export const KILL_REWARDS = Object.freeze({
-  chaser: 5,
-  shooter: 8,
-  orbiter: 6,
-  'mini-boss': 25,
-  boss: 100,
-});
+import { BALANCE, waveClearPayout, inflatedPrice } from '../data/balance.js';
 
-/** Reward for clearing a wave (pre-modifier). */
-export const WAVE_CLEAR_REWARD = 15;
+// All numeric tunables in this module come from `BALANCE`. The re-exports
+// below preserve the SPRINT-03 public surface for callers that still consume
+// raw constants (tests, debug overlays) — do NOT add new numbers here.
+/** Base reward per enemy archetype. Sourced from data/balance.js. */
+export const KILL_REWARDS = BALANCE.currency.killRewards;
+
+/** Reward for clearing a wave (pre-modifier). Sourced from data/balance.js. */
+export const WAVE_CLEAR_REWARD = BALANCE.currency.waveClearBonus;
 
 /** Per-visit inflation: each successive purchase of an item in the same visit
  *  raises *that item's* price by this fraction. */
-export const INFLATION_STEP = 0.10;
+export const INFLATION_STEP = BALANCE.currency.inflationRate;
 
 /** Shop size bounds. Inventory size scales with biome index. */
 const SHOP_MIN_SIZE = 5;
@@ -63,8 +62,8 @@ export const SHOP_CATALOG = Object.freeze({
   curse_removal:   { id: 'curse_removal',   kind: 'curse',      name: 'PURGE CURSE',      basePrice: 60,  effect: { removeCurse: 1 },           rarity: 'uncommon' },
 });
 
-/** Rarity selection weights when rolling shop inventory. */
-const RARITY_WEIGHTS = { common: 5, uncommon: 3, rare: 1 };
+/** Rarity selection weights when rolling shop inventory. Sourced from BALANCE. */
+const RARITY_WEIGHTS = BALANCE.upgrades.rarityWeights;
 
 // ---------------------------------------------------------------------------
 
@@ -80,6 +79,13 @@ export class CurrencyManager {
     this._getMul = typeof getMultiplier === 'function' ? getMultiplier : () => 1;
     this._lifetimeEarned = 0;
     this._lifetimeSpent = 0;
+    /** Per-source earn totals — feeds run-summary / pick-rate telemetry. */
+    this._earnedBySource = Object.create(null);
+    /** Per-reason spend totals — used by economy-balance instrumentation. */
+    this._spentByReason = Object.create(null);
+    /** Per-item shop purchase counts — drives the pick-rate metric for
+     *  WO-07-C1 balance audits (curses should land at 30–50 %). */
+    this._pickCounts = Object.create(null);
   }
 
   /** Earn `amount` units, scaled by the upgrade multiplier. Floored to int.
@@ -91,6 +97,7 @@ export class CurrencyManager {
     if (credited === 0) return 0;
     this._balance += credited;
     this._lifetimeEarned += credited;
+    this._earnedBySource[source] = (this._earnedBySource[source] || 0) + credited;
     if (this._bus) this._bus.emit('currency:earned', { amount: credited, source, balance: this._balance });
     return credited;
   }
@@ -104,8 +111,14 @@ export class CurrencyManager {
 
   /** Reward for clearing a wave. `waveIndex` is 0-based; later waves pay slightly more. */
   earnFromWaveClear(waveIndex = 0) {
-    const scaled = WAVE_CLEAR_REWARD + Math.floor(waveIndex * 2);
-    return this.earn(scaled, 'wave:clear');
+    return this.earn(waveClearPayout(waveIndex), 'wave:clear');
+  }
+
+  /** Reward for clearing a boss fight. */
+  earnFromBossKill(isMiniBoss = false) {
+    const c = BALANCE.currency;
+    const amount = isMiniBoss ? c.miniBossReward : c.bossReward;
+    return this.earn(amount, isMiniBoss ? 'kill:mini-boss' : 'kill:boss');
   }
 
   /** Try to spend `amount`. Returns true on success, false if insufficient. */
@@ -115,6 +128,14 @@ export class CurrencyManager {
     if (this._balance < cost) return false;
     this._balance -= cost;
     this._lifetimeSpent += cost;
+    this._spentByReason[reason] = (this._spentByReason[reason] || 0) + cost;
+    // Reason format conventions: 'shop:<itemId>', 'upgrade:<rarity>'.
+    // Recording the leading segment lets the pick-rate telemetry bucket by category.
+    const colon = reason.indexOf(':');
+    if (colon > 0) {
+      const tag = reason.slice(colon + 1);
+      this._pickCounts[tag] = (this._pickCounts[tag] || 0) + 1;
+    }
     if (this._bus) this._bus.emit('currency:spent', { amount: cost, reason, balance: this._balance });
     return true;
   }
@@ -127,7 +148,27 @@ export class CurrencyManager {
 
   /** Diagnostics — useful for run-summary panels. */
   getStats() {
-    return { balance: this._balance, earned: this._lifetimeEarned, spent: this._lifetimeSpent };
+    return {
+      balance: this._balance,
+      earned: this._lifetimeEarned,
+      spent: this._lifetimeSpent,
+      earnedBySource: { ...this._earnedBySource },
+      spentByReason: { ...this._spentByReason },
+      pickRates: this.getPickRates(),
+    };
+  }
+
+  /** Pick-rate report keyed by item / category tag (e.g. 'curse', 'heal_25').
+   *  Returns absolute counts; callers normalize against total purchases. */
+  getPickRates() {
+    const counts = { ...this._pickCounts };
+    let total = 0;
+    for (const k of Object.keys(counts)) total += counts[k];
+    const rates = Object.create(null);
+    if (total > 0) {
+      for (const k of Object.keys(counts)) rates[k] = counts[k] / total;
+    }
+    return { counts, rates, total };
   }
 
   /** Wire to the EventBus so kills/wave-clears auto-credit currency.
@@ -202,7 +243,7 @@ export class Shop {
 
     // Biome/wave price drift: scale base prices subtly with progression so later
     // shops cost more even before per-visit inflation kicks in.
-    const progress = 1 + wave * 0.04;
+    const progress = 1 + wave * BALANCE.currency.shopWavePriceDrift;
 
     this.inventory = picks.map((entry) => ({
       itemId: entry.id,
@@ -261,19 +302,17 @@ export class Shop {
 
     // Inflate THIS slot's price for the next purchase in the same visit.
     if (!entry?.unique) {
-      slot.price = this._computePrice(slot.basePrice * (1 + this.wave * 0.04), slot.purchasesThisVisit);
+      slot.price = this._computePrice(slot.basePrice * (1 + this.wave * BALANCE.currency.shopWavePriceDrift), slot.purchasesThisVisit);
     }
 
     if (this._bus) this._bus.emit('shop:purchased', { itemId, price, item: { ...slot } });
     return { ok: true, price, item: { ...slot } };
   }
 
-  /** Internal: base * (1 - discount) * (1 + INFLATION_STEP) ** purchases, rounded. */
+  /** Internal: base * (1 - discount) * (1 + inflationRate) ** purchases, rounded.
+   *  Delegates to data/balance.js so designers can tune both rates in one place. */
   _computePrice(base, purchasesThisVisit) {
-    const discount = Math.min(0.75, Math.max(0, Number(this._getDiscount()) || 0));
-    const inflated = base * Math.pow(1 + INFLATION_STEP, purchasesThisVisit);
-    const final = inflated * (1 - discount);
-    return Math.max(1, Math.round(final));
+    return inflatedPrice(base, purchasesThisVisit, this._getDiscount());
   }
 }
 

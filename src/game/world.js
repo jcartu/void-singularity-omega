@@ -28,6 +28,8 @@ import { WaveDirector } from './director.js';
 import { UpgradeManager } from './upgrades.js';
 import { createEconomy } from './economy.js';
 import { RunStateMachine, RUN_STATE } from './run.js';
+import { RunEndManager } from './run-end.js';
+import { SaveManager } from '../engine/save.js';
 import { BossManager } from './boss-manager.js';
 import { BiomeSkins } from '../render/biome-skins.js';
 import { VFXManager } from '../render/vfx.js';
@@ -218,6 +220,13 @@ export class World {
       rng: this.rng.fx,
       rng: this.rng.fx,
       externalBoss: true,
+    });
+
+    this.save = new SaveManager();
+    this.runEnd = new RunEndManager({
+      economy: this.economy,
+      save: this.save,
+      bus: this.bus,
     });
 
     // ── Boss + biome wiring (WO-06-G1) ────────────────────────────────────
