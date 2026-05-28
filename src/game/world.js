@@ -29,6 +29,7 @@ import { UpgradeManager } from './upgrades.js';
 import { createEconomy } from './economy.js';
 import { RunStateMachine } from './run.js';
 import { ParticleManager } from '../render/particles.js';
+import { AudioHooks } from './audio-hooks.js';
 
 // Gravitational constant tuned for arcade feel (not physical).
 const GRAV_K = 320;
@@ -96,6 +97,7 @@ export class World {
       input: this.input,
       camera: this.camera,
       gravity: this.gravitySource,
+      bus: this.bus,
     });
 
     // Projectile pool + weapons.
@@ -103,6 +105,7 @@ export class World {
     this.weapons = new WeaponSystem({
       pool: this.projectilePool,
       ship: this.ship,
+      bus: this.bus,
       enemyProvider: () => (this.enemies ? this.enemies.enemies.values() : null),
     });
     this.combo = new ComboManager({ bus: this.bus });
@@ -227,6 +230,14 @@ export class World {
 
     // Kick off the run on init. Future: gated by ship-select screen (WO-03-U2).
     this.runState.startRun('default', this.seed);
+
+    // Audio hooks: translates gameplay events → audio-shaped events on the same
+    // bus. Constructed last so it sees the live director/ship for intensity.
+    this.audioHooks = new AudioHooks({
+      bus: this.bus,
+      director: this.director,
+      ship: this.ship,
+    });
   }
 
   _starfield(count, radius) {
@@ -284,6 +295,7 @@ export class World {
     this.enemyRenderers.update();
     if (this.particles) this.particles.update(simDt);
     if (this.combo) this.combo.update(simDt);
+    if (this.audioHooks) this.audioHooks.update(dt);
     this.hud.update();
     if (this.screenFx) {
       const maxH = this.ship?.opts?.maxHealth ?? 100;

@@ -9,6 +9,7 @@ import { World } from './game/world.js';
 import { Profiler } from './engine/profiler.js';
 import { runStorm } from './scenarios/storm.js';
 import { PerfGate } from './render/perf-gate.js';
+import { AudioCore } from './audio/audio.js';
 
 const bootEl = document.getElementById('boot');
 const fatalEl = document.getElementById('fatal');
@@ -66,8 +67,13 @@ async function main() {
   const perfGate = new PerfGate({ postfx: world.fx, profiler, tier: cap.tier ?? 'high' });
   world.perfGate = perfGate;
 
+  // Audio: single context, started on first user gesture (autoplay-policy safe).
+  // Audio: single context, started on first user gesture (autoplay-policy safe).
+  const audio = new AudioCore({ bus: world.bus });
+  audio.armGestureStart(window);
+
   // Expose for the perf harness + opus capture scripts.
-  window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, scenarios: { runStorm } };
+  window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, audio, scenarios: { runStorm } };
 
   loop.start();
 }

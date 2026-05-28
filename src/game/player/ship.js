@@ -42,7 +42,7 @@ export const SHIP_DEFAULTS = Object.freeze({
 });
 
 export class Ship {
-  constructor({ scene, input, camera, gravity = null, opts = {} } = {}) {
+  constructor({ scene, input, camera, gravity = null, bus = null, opts = {} } = {}) {
     if (!scene) throw new Error('Ship: scene required');
     if (!input) throw new Error('Ship: input required');
     if (!camera) throw new Error('Ship: camera required');
@@ -51,6 +51,7 @@ export class Ship {
     this.input = input;
     this.camera = camera;
     this.gravity = gravity;          // { position: Vector3, mass: number } or null
+    this.bus = bus;                  // optional EventBus for sfx:dash etc.
     this.opts = { ...SHIP_DEFAULTS, ...opts };
 
     // Kinematics on XZ plane.
@@ -250,6 +251,9 @@ export class Ship {
     this._dashCooldown = this.opts.dashCooldown;
     this._iframeTime = this.opts.dashIFrames;
     this.energy -= this.opts.dashEnergyCost;
+    if (this.bus) {
+      this.bus.emit('sfx:dash', { pos: [this.position.x, this.position.y, this.position.z] });
+    }
   }
 
   _updateAim() {

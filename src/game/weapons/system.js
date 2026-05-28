@@ -30,6 +30,7 @@ export class WeaponSystem {
     enemyProvider = null,    // () => Iterable<{ position:{x,y,z}, alive?:boolean, id?:any }>
     gravitySpawner = null,   // ({x,y,z,duration,mass,radius}) => void
     droneSpawner = null,     // ({position,direction,count,duration,fireRate,damage,color,orbitRadius}) => void
+    bus = null,              // optional EventBus — emits 'sfx:fire' on each fire() so audio module can react
   } = {}) {
     this.pool = pool;
     this.defs = defs;
@@ -40,6 +41,7 @@ export class WeaponSystem {
     this.enemyProvider = enemyProvider;
     this.gravitySpawner = gravitySpawner;
     this.droneSpawner = droneSpawner;
+    this.bus = bus;
 
     this.cooldowns = Object.create(null);
     for (const id of this.allOrder) this.cooldowns[id] = 0;
@@ -335,6 +337,15 @@ export class WeaponSystem {
     }
 
     const spawned = this._dispatch(def, ctx);
+
+    if (spawned > 0 && this.bus) {
+      const p = ctx.position;
+      this.bus.emit('sfx:fire', {
+        pos: [p[0], p[1], p[2]],
+        weaponType: id,
+        intensity: def.type === 'secondary' ? 1.0 : 0.7,
+      });
+    }
 
     if (spawned > 0 || def.type === 'secondary') {
       this.cooldowns[id] = def.cooldown;
