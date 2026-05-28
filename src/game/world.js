@@ -16,11 +16,16 @@ import { Ship } from './player/ship.js';
 import { ProjectilePool } from './projectiles/pool.js';
 import { WeaponSystem } from './weapons/system.js';
 import { HUD } from '../ui/hud.js';
+import { ComboManager } from './combo.js';
 import { EnemyInstancedRenderers } from '../render/instancing.js';
 import { ENEMY_TYPES } from './enemies/types.js';
 import { EnemyManager } from './enemies/index.js';
 import { createRngStreams } from '../engine/rng.js';
 import { EventBus } from '../engine/events.js';
+import { WaveDirector } from './director.js';
+import { UpgradeManager } from './upgrades.js';
+import { createEconomy } from './economy.js';
+import { RunStateMachine } from './run.js';
 
 // Gravitational constant tuned for arcade feel (not physical).
 const GRAV_K = 320;
@@ -92,7 +97,12 @@ export class World {
 
     // Projectile pool + weapons.
     this.projectilePool = new ProjectilePool({ scene: this.scene, capacity: 1024 });
-    this.weapons = new WeaponSystem({ pool: this.projectilePool });
+    this.weapons = new WeaponSystem({
+      pool: this.projectilePool,
+      ship: this.ship,
+      enemyProvider: () => (this.enemies ? this.enemies.enemies.values() : null),
+    });
+    this.combo = new ComboManager({ bus: this.bus });
     this.hud = new HUD({
       weapons: this.weapons,
       ship: this.ship,
@@ -100,8 +110,16 @@ export class World {
       projectilePool: this.projectilePool,
       gravity: this.gravitySource,
       profiler: null, // wired post-construction by main.js
+      combo: this.combo,
+      contract: () => this._currentContract(),
+      run: () => this.runState?.state ?? 'idle',
+      bus: this.bus,
+      camera: this.camera,
     });
-    this._weaponSwitchPrev = { d1: false, d2: false, q: false };
+    this._weaponSwitchPrev = {
+      d1: false, d2: false, d3: false, d4: false, d5: false, d6: false, q: false,
+      f1: false, f2: false, f3: false, f4: false,
+    };
 
     // Enemy instanced renderers — one draw call per enemy type, ECS-driven.
     this.enemyRenderers = new EnemyInstancedRenderers({
@@ -137,11 +155,52 @@ export class World {
       gravity: this.gravitySource,
     });
     this.enemies.setPlayer(this.ship);
-    // Seed encounter so all three behaviors are visibly active out of the box.
-    this.enemies.spawn({ type: ENEMY_TYPES.CHASER,  position: [22, 0, 18] });
-    this.enemies.spawn({ type: ENEMY_TYPES.SHOOTER, position: [-20, 0, 16] });
-    this.enemies.spawn({ type: ENEMY_TYPES.ORBITER, position: [11, 0, 0],  params: { direction: 1 } });
-    this.enemies.spawn({ type: ENEMY_TYPES.ORBITER, position: [-11, 0, 0], params: { direction: -1 } });
+
+    // Run orchestration: director + upgrades + economy + state machine.
+    // The four systems are headless; HUD/UI screens (WO-03-U1/U2) read from
+    // runState.getState() each frame. We do NOT seed a debug encounter here
+    // anymore — runState.startRun() spawns the first wave via the director.
+    this.upgradesMgr = new UpgradeManager({
+      ship: this.ship,
+      weapons: this.weapons,
+      rng: this.rng.fx,
+    });
+    this.economy = createEconomy({
+      bus: this.bus,
+      rng: this.rng.fx,
+      initialBalance: 0,
+    });
+    this._unsubKills = this.economy.currency.attachToBus(this.bus);
+    this.director = new WaveDirector({
+      enemies: this.enemies,
+      bus: this.bus,
+      rng: this.rng.fx,
+      gravity: this.gravitySource,
+    });
+    this.runState = new RunStateMachine({
+      ship: this.ship,
+      director: this.director,
+      upgrades: this.upgradesMgr,
+      economy: this.economy,
+      bus: this.bus,
+      rng: this.rng.fx,
+    });
+
+    // Subscribe to run-level signals so the game pauses on win/lose. The HUD
+    // will render the actual summary panels (WO-03-U2); world.js only owns
+    // the gameplay-pause toggle here.
+    this._runPaused = false;
+    this._unsubRunOver    = this.bus.on('run:over',    (summary) => {
+      this._runPaused = true;
+      this._lastRunSummary = summary;
+    });
+    this._unsubRunVictory = this.bus.on('run:victory', (summary) => {
+      this._runPaused = true;
+      this._lastRunSummary = summary;
+    });
+
+    // Kick off the run on init. Future: gated by ship-select screen (WO-03-U2).
+    this.runState.startRun('default', this.seed);
   }
 
   _starfield(count, radius) {
@@ -186,7 +245,9 @@ export class World {
     this.projectilePool.update(dt);
     this.weapons.update(dt);
     if (this.enemies) this.enemies.update(dt, performance.now() * 0.001);
+    if (this.runState && !this._runPaused) this.runState.update(dt);
     this.enemyRenderers.update();
+    if (this.combo) this.combo.update(dt);
     this.hud.update();
 
     this.ecs.run(dt);
@@ -201,17 +262,42 @@ export class World {
   }
 
   _handleWeapons(/* dt */) {
-    // Weapon switching: 1=plasma, 2=rail, Q=cycle (edge-triggered).
+    // Weapon switching: 1..6 = primaries; Q = cycle primaries; F1..F4 = secondaries.
     const i = this.input;
+    const sw = this._weaponSwitchPrev;
     const d1 = i.down('Digit1');
     const d2 = i.down('Digit2');
-    const q = i.down('KeyQ');
-    if (d1 && !this._weaponSwitchPrev.d1) this.weapons.setActive('plasma');
-    if (d2 && !this._weaponSwitchPrev.d2) this.weapons.setActive('rail');
-    if (q && !this._weaponSwitchPrev.q) this.weapons.cycle(1);
-    this._weaponSwitchPrev.d1 = d1;
-    this._weaponSwitchPrev.d2 = d2;
-    this._weaponSwitchPrev.q = q;
+    const d3 = i.down('Digit3');
+    const d4 = i.down('Digit4');
+    const d5 = i.down('Digit5');
+    const d6 = i.down('Digit6');
+    const q  = i.down('KeyQ');
+    if (d1 && !sw.d1) this.weapons.setActive('plasma');
+    if (d2 && !sw.d2) this.weapons.setActive('rail');
+    if (d3 && !sw.d3) this.weapons.setActive('homing');
+    if (d4 && !sw.d4) this.weapons.setActive('beam');
+    if (d5 && !sw.d5) this.weapons.setActive('ricochet');
+    if (d6 && !sw.d6) this.weapons.setActive('voidlob');
+    if (q  && !sw.q)  this.weapons.cycle(1);
+    sw.d1 = d1; sw.d2 = d2; sw.d3 = d3; sw.d4 = d4; sw.d5 = d5; sw.d6 = d6; sw.q = q;
+
+    // Secondaries on Z/X/C/V (F-keys conflict with browser & HUD F3 toggle).
+    const f1 = i.down('KeyZ');
+    const f2 = i.down('KeyX');
+    const f3 = i.down('KeyC');
+    const f4 = i.down('KeyV');
+    const sp = this.ship.position;
+    const h  = this.ship.heading;
+    const nx = Math.sin(h), nz = Math.cos(h);
+    const secCtx = {
+      position: [sp.x + nx * 0.9, sp.y + 0.2, sp.z + nz * 0.9],
+      direction: [nx, 0, nz],
+    };
+    if (f1 && !sw.f1) this.weapons.fire(secCtx, 'dash_nuke');
+    if (f2 && !sw.f2) this.weapons.fire(secCtx, 'time_dilation');
+    if (f3 && !sw.f3) this.weapons.fire(secCtx, 'singularity_grenade');
+    if (f4 && !sw.f4) this.weapons.fire(secCtx, 'drone_swarm');
+    sw.f1 = f1; sw.f2 = f2; sw.f3 = f3; sw.f4 = f4;
 
     // Fire: held mouse OR KeyF (auto-fire while held; the per-weapon cooldown gates rate).
     const wantFire = i.pointer.down || i.down('KeyF');
@@ -228,6 +314,18 @@ export class World {
       });
     }
     this._firePrev = wantFire;
+  }
+
+  /** Compute the current contract banner payload, or null to hide. */
+  _currentContract() {
+    if (!this.runState) return null;
+    const s = this.runState.getState ? this.runState.getState() : null;
+    if (!s || !s.biomeName) return null;
+    // Only show while a wave is actively running or boss is fighting.
+    if (s.state !== RUN_STATE.WAVE_ACTIVE && s.state !== RUN_STATE.BOSS_FIGHT) return null;
+    const progress = s.wave ?? 0;
+    const max = s.totalWaves ?? 0;
+    return { name: s.biomeName, progress, max };
   }
 
   resize(w, h) {
