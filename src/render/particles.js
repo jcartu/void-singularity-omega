@@ -105,6 +105,10 @@ class _BaseSystem {
     this.gravity = gravity;
     this.ship = ship;
     this._thrustAccumulator = 0;
+    // LOD parameters — written by ParticleManager.update() each frame; the
+    // subclass renderer pass consults these to zero-fade far particles.
+    this._lodAx = 0; this._lodAy = 0; this._lodAz = 0;
+    this._lodDistSq = Infinity;
   }
 
   setGravity(g) { this.gravity = g; }
@@ -357,6 +361,9 @@ export class GPUParticleSystem extends _BaseSystem {
     const p = this.pool;
     // Compute per-particle alpha = fade(age/life). Writes only the live tail.
     const n = p.count;
+    const ax = this._lodAx, ay = this._lodAy, az = this._lodAz;
+    const lodSq = this._lodDistSq;
+    const lodOn = Number.isFinite(lodSq);
     for (let i = 0; i < n; i++) {
       const t = p.age[i] / Math.max(0.001, p.life[i]);
       // Fade-in 0..0.15, fade-out 0.7..1.0.
@@ -364,7 +371,14 @@ export class GPUParticleSystem extends _BaseSystem {
       if (t < 0.15)      a = t / 0.15;
       else if (t > 0.7)  a = 1 - (t - 0.7) / 0.3;
       else               a = 1;
-      this._alpha[i] = Math.max(0, Math.min(1, a));
+      if (lodOn) {
+        const i3 = i * 3;
+        const dx = p.pos[i3] - ax;
+        const dy = p.pos[i3+1] - ay;
+        const dz = p.pos[i3+2] - az;
+        if (dx*dx + dy*dy + dz*dz > lodSq) a = 0;
+      }
+      this._alpha[i] = a < 0 ? 0 : (a > 1 ? 1 : a);
     }
     this.geometry.attributes.position.needsUpdate = true;
     this.geometry.attributes.aColor.needsUpdate = true;
@@ -421,6 +435,9 @@ export class InstancedParticleSystem extends _BaseSystem {
     super.update(dt);
     const p = this.pool;
     const n = p.count;
+    const ax = this._lodAx, ay = this._lodAy, az = this._lodAz;
+    const lodSq = this._lodDistSq;
+    const lodOn = Number.isFinite(lodSq);
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       const t = p.age[i] / Math.max(0.001, p.life[i]);
@@ -428,10 +445,17 @@ export class InstancedParticleSystem extends _BaseSystem {
       if (t < 0.15)     fade = t / 0.15;
       else if (t > 0.7) fade = 1 - (t - 0.7) / 0.3;
       else              fade = 1;
-      fade = Math.max(0, Math.min(1, fade));
+      fade = fade < 0 ? 0 : (fade > 1 ? 1 : fade);
+      let scale = p.size[i] * 2.0 * (0.4 + fade);
+      if (lodOn) {
+        const dx = p.pos[i3] - ax;
+        const dy = p.pos[i3+1] - ay;
+        const dz = p.pos[i3+2] - az;
+        if (dx*dx + dy*dy + dz*dz > lodSq) { fade = 0; scale = 0; }
+      }
       _scratchObj.position.set(p.pos[i3], p.pos[i3+1], p.pos[i3+2]);
       _scratchObj.rotation.set(-Math.PI / 2, 0, 0); // face up (world XZ plane is gameplay)
-      _scratchObj.scale.setScalar(p.size[i] * 2.0 * (0.4 + fade));
+      _scratchObj.scale.setScalar(scale);
       _scratchObj.updateMatrix();
       this.mesh.setMatrixAt(i, _scratchObj.matrix);
       _scratchCol.setRGB(p.col[i3] * fade, p.col[i3+1] * fade, p.col[i3+2] * fade);
@@ -468,6 +492,7 @@ export class ParticleManager {
   constructor({
     tier = 'medium', scene, bus = null, gravity = null, ship = null,
     forceFallback = false, capacityOverrides = null,
+    lodDistance = Infinity,
   } = {}) {
     if (!scene) throw new Error('ParticleManager: scene required');
     this.tier = tier;
@@ -490,7 +515,18 @@ export class ParticleManager {
     this._unsubs = [];
     this._caps = caps;
     this._disposed = false;
+
+    // Distance-based LOD. Particles farther than `lodDistance` from the LOD
+    // anchor (ship/camera focus) skip their per-frame render write. Default
+    // Infinity = no culling (preserves existing visuals).
+    this.lodDistance = lodDistance;
+    this._lodAnchor = null; // {x,y,z} or Vector3-like
   }
+
+  /** Set the world-space anchor used for distance LOD (e.g. ship.position). */
+  setLODAnchor(anchor) { this._lodAnchor = anchor; }
+  /** Update the distance threshold; Infinity disables culling. */
+  setLODDistance(d) { this.lodDistance = Number.isFinite(d) ? d : Infinity; }
 
   /** Build all three default systems. */
   init() {
@@ -611,7 +647,17 @@ export class ParticleManager {
       }
     }
 
-    for (const s of this.systems.values()) s.update(dt);
+    // Propagate LOD anchor + distance squared into each system before render.
+    const anchor = this._lodAnchor ?? this.ship?.position ?? null;
+    const lodSq = (Number.isFinite(this.lodDistance) && anchor)
+      ? (this.lodDistance * this.lodDistance)
+      : Infinity;
+    const ax = anchor?.x ?? 0, ay = anchor?.y ?? 0, az = anchor?.z ?? 0;
+    for (const s of this.systems.values()) {
+      s._lodAx = ax; s._lodAy = ay; s._lodAz = az;
+      s._lodDistSq = lodSq;
+      s.update(dt);
+    }
   }
 
   /** Update bound gravity/ship references (e.g. after run reset). */

@@ -35,6 +35,7 @@ import { BiomeSkins } from '../render/biome-skins.js';
 import { VFXManager } from '../render/vfx.js';
 import { ParticleManager } from '../render/particles.js';
 import { AudioHooks } from './audio-hooks.js';
+import { AssetManager } from '../engine/assets.js';
 
 // Gravitational constant tuned for arcade feel (not physical).
 const GRAV_K = 320;
@@ -272,6 +273,20 @@ export class World {
       console.warn('[world] biome skins unavailable:', err?.message ?? err);
       this.biomeSkins = null;
     }
+    // SPRINT-08 asset/VRAM tracking. Wired before the biome:enter listener so
+    // it sees every transition. Independent of biomeSkins availability.
+    try {
+      this.assets = new AssetManager({
+        renderer: this.renderer,
+        tier: this.cap?.tier ?? 'medium',
+        bus: this.bus,
+      });
+      this.assets.attachBiomeTransitions(this.bus);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[world] asset manager unavailable:', err?.message ?? err);
+      this.assets = null;
+    }
     // On every biome:enter event from the RSM, swap the skin.
     this._unsubBiomeEnter = this.bus.on('biome:enter', (payload) => {
       const id = payload?.biome ?? null;
@@ -360,6 +375,14 @@ export class World {
   onFirstFrame(cb) { this._firstFrameCbs.push(cb); }
 
   update(dt /*, t */) {
+    const b = this.budget;
+    if (b) b.measureSystem('sim', () => this._updateSim(dt));
+    else this._updateSim(dt);
+    if (b) b.measureSystem('audio', () => { if (this.audioHooks) this.audioHooks.update(dt); });
+    else if (this.audioHooks) this.audioHooks.update(dt);
+  }
+
+  _updateSim(dt) {
     // Hit-feel: consume one freeze frame if any. We still tick render-side
     // bookkeeping with REAL dt below — only the gameplay-systems step gets
     // zeroed. This keeps the loop's fixed-step accumulator honest.
@@ -397,7 +420,7 @@ export class World {
     this.enemyRenderers.update();
     if (this.particles) this.particles.update(simDt);
     if (this.combo) this.combo.update(simDt);
-    if (this.audioHooks) this.audioHooks.update(dt);
+    // Audio update is timed separately by BudgetManager (see update() above).
     this.hud.update();
     if (this.screenFx) {
       const maxH = this.ship?.opts?.maxHealth ?? 100;
@@ -420,10 +443,19 @@ export class World {
   }
 
   render(/* alpha */) {
-    this.fx.render(/* dt */);
+    const b = this.budget;
+    if (b) b.measureSystem('render', () => this.fx.render(/* dt */));
+    else this.fx.render(/* dt */);
+    // PostFX self-times its own pass — feed lastRenderMs into the 'post' bucket.
+    if (b && this.fx) {
+      const pms = this.fx.fx?.lastRenderMs ?? this.fx.lastRenderMs;
+      if (Number.isFinite(pms)) b.record('post', pms);
+    }
     // PerfGate (if wired) samples PostFX.lastRenderMs and enforces tier budget
     // every 30 frames. Called after render() so it picks up the prior-frame timing.
     if (this.perfGate) this.perfGate.update(1 / 60);
+    // BudgetManager advances hysteresis (auto-tier) after all systems sampled.
+    if (b) b.update(1 / 60);
     if (!this._framed) {
       this._framed = true;
       this._firstFrameCbs.forEach((cb) => cb());

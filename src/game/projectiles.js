@@ -28,6 +28,21 @@ export const TEAM_NEUTRAL = 2;
 // but the sim is tuned and stable for FIXED_STEP.
 export const FIXED_STEP = 1 / 120;
 
+// Per-tier active-bullet capacity targets. SPRINT-08 scaling contract:
+//   ultra: 15000, high: 10000, medium: 5000, low: 2000.
+// Callers should pass `capacity: BulletPool.capacityForTier(tier)` so the pool
+// is sized once at boot and never reallocates.
+export const TIER_BULLET_CAPS = Object.freeze({
+  ultra:  15000,
+  high:   10000,
+  medium: 5000,
+  low:    2000,
+});
+
+export function bulletCapacityForTier(tier) {
+  return TIER_BULLET_CAPS[tier] ?? TIER_BULLET_CAPS.medium;
+}
+
 const DEFAULT_CAPACITY = 16384;     // > 10k headroom
 const DEFAULT_WORLD_EXTENT = 200;   // half-size of the simulated cube
 const DEFAULT_CELL_SIZE = 4;        // grid cell edge length (world units)
@@ -411,6 +426,9 @@ export class BulletPool {
   get activeCount() { return this.count; }
   get highWater() { return this._max; }
   get freeSlots() { return this._freeTop; }
+
+  /** Resolve per-tier bullet capacity. See TIER_BULLET_CAPS. */
+  static capacityForTier(tier) { return bulletCapacityForTier(tier); }
 }
 
 export default BulletPool;

@@ -1,0 +1,112 @@
+{
+  "schema": "omega.perf-matrix.report",
+  "version": 1,
+  "generatedAt": "2026-05-28T12:14:50.521Z",
+  "tiers": [
+    "webgl2",
+    "low"
+  ],
+  "scenarios": [
+    "idle",
+    "storm"
+  ],
+  "captureMs": 2500,
+  "warmupMs": 1000,
+  "soakMs": 3000,
+  "profiles": {
+    "ultra": {
+      "cpuRate": 1,
+      "storm": {
+        "bullets": 16000,
+        "enemies": 200
+      },
+      "floorFps": 60,
+      "forceWebGL2": false,
+      "label": "ultra  (no throttle)"
+    },
+    "high": {
+      "cpuRate": 4,
+      "storm": {
+        "bullets": 12000,
+        "enemies": 160
+      },
+      "floorFps": 60,
+      "forceWebGL2": false,
+      "label": "high   (CPU 4x)"
+    },
+    "medium": {
+      "cpuRate": 8,
+      "storm": {
+        "bullets": 8000,
+        "enemies": 120
+      },
+      "floorFps": 45,
+      "forceWebGL2": false,
+      "label": "medium (CPU 8x)"
+    },
+    "low": {
+      "cpuRate": 16,
+      "storm": {
+        "bullets": 4000,
+        "enemies": 60
+      },
+      "floorFps": 30,
+      "forceWebGL2": false,
+      "label": "low    (CPU 16x)"
+    },
+    "webgl2": {
+      "cpuRate": 8,
+      "storm": {
+        "bullets": 4000,
+        "enemies": 60
+      },
+      "floorFps": 30,
+      "forceWebGL2": true,
+      "label": "webgl2 (fallback, CPU 8x)"
+    }
+  },
+  "matrix": {
+    "webgl2": {
+      "idle": {
+        "fpsAvg": 43.5,
+        "fpsP1": 90.91,
+        "frameP99Ms": 11,
+        "samples": 6,
+        "pass": true,
+        "floorFps": 30,
+        "elapsedMs": 2645
+      },
+      "storm": {
+        "fpsAvg": 32.64,
+        "fpsP1": 131.58,
+        "frameP99Ms": 7.6,
+        "samples": 6,
+        "pass": true,
+        "floorFps": 30,
+        "elapsedMs": 4056
+      }
+    },
+    "low": {
+      "idle": {
+        "fpsAvg": 41.96,
+        "fpsP1": 277.78,
+        "frameP99Ms": 3.6,
+        "samples": 6,
+        "pass": true,
+        "floorFps": 30,
+        "elapsedMs": 2640
+      },
+      "storm": {
+        "fpsAvg": 20.4,
+        "fpsP1": 277.78,
+        "frameP99Ms": 3.6,
+        "samples": 6,
+        "pass": true,
+        "floorFps": 30,
+        "elapsedMs": 4068
+      }
+    }
+  },
+  "breaches": 0,
+  "verdict": "all-tiers-pass"
+}

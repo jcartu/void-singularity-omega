@@ -361,6 +361,12 @@ export class HUD {
       <div><span class="k">Combo</span><span class="v" data-k="combo">—</span></div>
       <div><span class="k">Multiplier</span><span class="v" data-k="mult">—</span></div>
       <div><span class="k">Run</span><span class="v" data-k="run">—</span></div>
+      <div><span class="k">Tier</span><span class="v" data-k="tier">—</span></div>
+      <div><span class="k">Sim ms</span><span class="v" data-k="simMs">—</span></div>
+      <div><span class="k">Render ms</span><span class="v" data-k="renderMs">—</span></div>
+      <div><span class="k">Post ms</span><span class="v" data-k="postMs">—</span></div>
+      <div><span class="k">Audio ms</span><span class="v" data-k="audioMs">—</span></div>
+      <div><span class="k">Total ms</span><span class="v" data-k="totalMs">—</span></div>
     `;
     this._mount.appendChild(this.debug);
     this._dbg = {};
@@ -533,6 +539,16 @@ export class HUD {
     if (this.run) {
       const r = typeof this.run === 'function' ? this.run() : this.run.state;
       d.run.textContent = r ?? '—';
+    }
+    if (this.budget) {
+      const od = this.budget.getOverlayData();
+      const fmt = (s) => `${s.last.toFixed(2)} / ${s.avg.toFixed(2)} (≤${s.budget})`;
+      if (d.tier)     d.tier.textContent = od.tier;
+      if (d.simMs)    d.simMs.textContent = fmt(od.systems.sim);
+      if (d.renderMs) d.renderMs.textContent = fmt(od.systems.render);
+      if (d.postMs)   d.postMs.textContent = fmt(od.systems.post);
+      if (d.audioMs)  d.audioMs.textContent = fmt(od.systems.audio);
+      if (d.totalMs)  d.totalMs.textContent = `${od.total.avg.toFixed(2)} / ${od.total.budget} (${(od.total.ratio * 100).toFixed(0)}%)`;
     }
   }
 
