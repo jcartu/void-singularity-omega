@@ -8,6 +8,7 @@ import { Input } from './engine/input.js';
 import { World } from './game/world.js';
 import { Profiler } from './engine/profiler.js';
 import { runStorm } from './scenarios/storm.js';
+import { PerfGate } from './render/perf-gate.js';
 
 const bootEl = document.getElementById('boot');
 const fatalEl = document.getElementById('fatal');
@@ -61,7 +62,12 @@ async function main() {
   world.resize(window.innerWidth, window.innerHeight);
 
   // Expose for the perf harness + opus capture scripts.
-  window.__OMEGA__ = { world, renderer, loop, cap, profiler, scenarios: { runStorm } };
+  // PerfGate: per-node post-FX timing + tier-budget enforcement (SPRINT-04).
+  const perfGate = new PerfGate({ postfx: world.fx, profiler, tier: cap.tier ?? 'high' });
+  world.perfGate = perfGate;
+
+  // Expose for the perf harness + opus capture scripts.
+  window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, scenarios: { runStorm } };
 
   loop.start();
 }

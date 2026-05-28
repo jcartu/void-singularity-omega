@@ -16,7 +16,9 @@ import { Ship } from './player/ship.js';
 import { ProjectilePool } from './projectiles/pool.js';
 import { WeaponSystem } from './weapons/system.js';
 import { HUD } from '../ui/hud.js';
+import { ScreenFX } from '../ui/fx.js';
 import { ComboManager } from './combo.js';
+import { HitFeelManager } from './hitfeel.js';
 import { EnemyInstancedRenderers } from '../render/instancing.js';
 import { ENEMY_TYPES } from './enemies/types.js';
 import { EnemyManager } from './enemies/index.js';
@@ -26,6 +28,7 @@ import { WaveDirector } from './director.js';
 import { UpgradeManager } from './upgrades.js';
 import { createEconomy } from './economy.js';
 import { RunStateMachine } from './run.js';
+import { ParticleManager } from '../render/particles.js';
 
 // Gravitational constant tuned for arcade feel (not physical).
 const GRAV_K = 320;
@@ -116,6 +119,18 @@ export class World {
       bus: this.bus,
       camera: this.camera,
     });
+
+    // Hit-feel: hitstop, knockback bookkeeping, crit flash, well-surge pulse.
+    // Render-layer only — never mutates fixed-step semantics.
+    this.hitfeel = new HitFeelManager({ bus: this.bus, camera: this.camera });
+    // Screen juice: shake, flash, speed-lines, level-up bloom, damage vignette.
+    // Subscribes to the bus internally; world.update() pumps it with dt + HP.
+    this.screenFx = new ScreenFX({
+      bus: this.bus,
+      camera: this.camera,
+      postfx: this.fx?.fx ?? null,
+      intensityMultiplier: 1,
+    });
     this._weaponSwitchPrev = {
       d1: false, d2: false, d3: false, d4: false, d5: false, d6: false, q: false,
       f1: false, f2: false, f3: false, f4: false,
@@ -146,6 +161,17 @@ export class World {
         },
       },
     });
+
+    // Particle spectacle: accretion inflow, spark bursts, thrust trail.
+    // GPU points backend on high/ultra, instanced fallback on medium/low.
+    this.particles = new ParticleManager({
+      tier: this.cap?.tier ?? 'medium',
+      scene: this.scene,
+      bus: this.bus,
+      gravity: { center: this.core.position, mass: 320, horizonRadius: 2.4 },
+      ship: this.ship,
+    });
+    this.particles.init();
 
     // Enemy manager — owns spawn/death/behavior; renders via ECS instancing above.
     this.enemies = new EnemyManager({
@@ -225,6 +251,15 @@ export class World {
   onFirstFrame(cb) { this._firstFrameCbs.push(cb); }
 
   update(dt /*, t */) {
+    // Hit-feel: consume one freeze frame if any. We still tick render-side
+    // bookkeeping with REAL dt below — only the gameplay-systems step gets
+    // zeroed. This keeps the loop's fixed-step accumulator honest.
+    let simDt = dt;
+    if (this.hitfeel && this.hitfeel.consumeHitstopFrame()) {
+      simDt = 0;
+    }
+    if (this.hitfeel) this.hitfeel.update(dt);
+
     this.disk.rotation.z += dt * 0.4;
     this.core.rotation.y += dt * 0.6;
 
@@ -238,23 +273,43 @@ export class World {
       const invR = 1 / Math.sqrt(r2);
       const a = (GRAV_K * this.gravitySource.mass) / r2;
       this.ship.applyForce(dx * invR * a, 0, dz * invR * a);
-      this.ship.update(dt);
-      this._handleWeapons(dt);
+      this.ship.update(simDt);
+      this._handleWeapons(simDt);
     }
 
-    this.projectilePool.update(dt);
-    this.weapons.update(dt);
-    if (this.enemies) this.enemies.update(dt, performance.now() * 0.001);
-    if (this.runState && !this._runPaused) this.runState.update(dt);
+    this.projectilePool.update(simDt);
+    this.weapons.update(simDt);
+    if (this.enemies) this.enemies.update(simDt, performance.now() * 0.001);
+    if (this.runState && !this._runPaused) this.runState.update(simDt);
     this.enemyRenderers.update();
-    if (this.combo) this.combo.update(dt);
+    if (this.particles) this.particles.update(simDt);
+    if (this.combo) this.combo.update(simDt);
     this.hud.update();
+    if (this.screenFx) {
+      const maxH = this.ship?.opts?.maxHealth ?? 100;
+      this.screenFx.update(dt, this.ship?.health ?? null, maxH);
+    }
 
-    this.ecs.run(dt);
+    // Drive the gravitational-lensing post-process from the live well state.
+    // We pass world-space well center + a scaled mass so the screen-space
+    // deflection tracks the singularity rather than jittering in NDC.
+    if (this.fx?.updateLensing) {
+      this.fx.updateLensing(
+        this.gravitySource.position,
+        (this.gravitySource.mass ?? 1) * 1200,
+        2.4,
+        dt,
+      );
+    }
+
+    this.ecs.run(simDt);
   }
 
   render(/* alpha */) {
-    this.fx.render();
+    this.fx.render(/* dt */);
+    // PerfGate (if wired) samples PostFX.lastRenderMs and enforces tier budget
+    // every 30 frames. Called after render() so it picks up the prior-frame timing.
+    if (this.perfGate) this.perfGate.update(1 / 60);
     if (!this._framed) {
       this._framed = true;
       this._firstFrameCbs.forEach((cb) => cb());

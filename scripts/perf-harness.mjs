@@ -156,9 +156,13 @@ async function main() {
 
     const t0 = Date.now();
     let stormReport = null;
+    let postfxReport = null;
     if (SCENARIO === 'storm') {
       log('running storm scenario sweep across tiers:', TIERS.join(', '));
       stormReport = await runStormSweep(page);
+    } else if (SCENARIO === 'postfx') {
+      log('running postfx per-node perf scenario');
+      postfxReport = await runPostFXScenario(page);
     } else {
       log(`sampling ${DURATION_MS}ms`);
       const t0s = t0;
@@ -194,6 +198,7 @@ async function main() {
       final,
       summary: summarize(traces),
       storm: stormReport,
+      postfx: postfxReport,
     };
 
     await mkdir(dirname(OUT_PATH), { recursive: true });
@@ -201,6 +206,7 @@ async function main() {
     log('wrote', OUT_PATH);
     log('summary:', JSON.stringify(report.summary));
     if (stormReport) log('storm verdict:', stormReport.verdict);
+    if (postfxReport) log('postfx verdict:', postfxReport.verdict);
   } catch (err) {
     console.error('[perf:ERROR]', err?.stack ?? err);
     exitCode = 1;
@@ -314,5 +320,90 @@ function hintFor(phase) {
 }
 
 function round(v, p) { if (!Number.isFinite(v)) return 0; const m = 10 ** p; return Math.round(v * m) / m; }
+
+// ---------------------------------------------------------------------------
+// Post-FX per-node scenario (SPRINT-04 release valve).
+// ---------------------------------------------------------------------------
+const POSTFX_TIER_BUDGETS = { ultra: 8.0, high: 10.0, medium: 6.0, low: 3.0 };
+const POSTFX_PER_NODE_BUDGET_MS = 2.0;
+
+async function runPostFXScenario(page) {
+  const hasGate = await page.evaluate(() => !!window.__OMEGA__?.perfGate);
+  if (!hasGate) die('perfGate not exposed on window.__OMEGA__.perfGate');
+
+  const tier = await page.evaluate(() => window.__OMEGA__?.cap?.tier ?? window.__OMEGA__?.perfGate?.tier ?? 'high');
+  log('postfx: tier', tier);
+  const budget = POSTFX_TIER_BUDGETS[tier] ?? POSTFX_TIER_BUDGETS.high;
+
+  // Drive storm load in the background so the post-FX chain encodes against
+  // realistic geometry — total cost includes scene complexity, not just FX.
+  log('postfx: starting background storm load');
+  await page.evaluate(() => {
+    // Fire-and-forget; we don't await the storm so it runs concurrently.
+    window.__OMEGA__.scenarios.runStorm({ bullets: 4000, enemies: 80, durationMs: 30_000 })
+      .catch((e) => console.warn('[storm bg]', e?.message ?? e));
+  });
+  await page.waitForTimeout(800);
+
+  // Reset gate state and trigger per-node calibration.
+  log('postfx: calibrating per-node cost (differential A/B sampling)');
+  await page.evaluate(async () => {
+    const g = window.__OMEGA__.perfGate;
+    g.reset?.();
+    await g.calibrate({ framesPerNode: 5 });
+  });
+
+  // Settle. Now let the in-loop measureFrame() build a rolling average.
+  log('postfx: sampling rolling average for budget assessment');
+  await page.waitForTimeout(1500);
+
+  const beforeReport = await page.evaluate(() => window.__OMEGA__.perfGate.getReport());
+
+  // Run several enforceBudget passes to test auto-degradation. Each pass
+  // disables (or reduces) one node if the rolling average is over budget.
+  log('postfx: invoking enforceBudget up to 5 times to test degradation');
+  for (let i = 0; i < 5; i++) {
+    const acted = await page.evaluate(async () => {
+      const g = window.__OMEGA__.perfGate;
+      const before = g.log.length;
+      await g.enforceBudget();
+      return g.log.length > before;
+    });
+    if (!acted) break;
+    // Allow new rolling samples to accumulate before next decision.
+    await page.waitForTimeout(700);
+  }
+
+  const afterReport = await page.evaluate(() => window.__OMEGA__.perfGate.getReport());
+
+  const overPerNode = afterReport.nodes.filter((n) => n.overPerNodeBudget && n.calibrated);
+  const verdict = afterReport.underBudget && overPerNode.length === 0
+    ? 'pass'
+    : (afterReport.underBudget ? `per-node-breach:${overPerNode.map((n) => n.name).join(',')}` : 'over-budget');
+
+  const out = {
+    schema: 'omega.perf-harness.postfx',
+    version: 1,
+    tier,
+    budgetMs: budget,
+    perNodeBudgetMs: POSTFX_PER_NODE_BUDGET_MS,
+    verdict,
+    before: beforeReport,
+    after: afterReport,
+    overPerNodeBudget: overPerNode.map((n) => ({ name: n.name, msCost: n.msCost })),
+    actions: afterReport.log,
+  };
+
+  const outPath = resolve(ROOT, 'artifacts/perf-postfx.json');
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, JSON.stringify(out, null, 2));
+  log('postfx: wrote', outPath);
+  log(`postfx: rollingAvg=${afterReport.rollingAvgMs}ms budget=${budget}ms verdict=${verdict}`);
+  if (overPerNode.length) {
+    for (const n of overPerNode) log(`  per-node breach: ${n.name} = ${n.msCost}ms (max ${POSTFX_PER_NODE_BUDGET_MS}ms)`);
+  }
+  for (const a of afterReport.log) log(`  action[${a.frame}] ${a.action} ${a.node ?? ''} avg=${a.avgMs}`);
+  return out;
+}
 
 main().catch((e) => die(e?.stack ?? String(e)));
