@@ -186,6 +186,8 @@ async function main() {
 
   // Expose for the perf harness + opus capture scripts.
   window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, budget, audio, hitch, settings, a11y, transitions, titleManager, showTitle, scenarios: { runStorm } };
+  window.__OMEGA_BUILD__={commit:import.meta.env?.VITE_COMMIT??"dev",builtAt:new Date().toISOString()};
+  console.info("[OMEGA] build",window.__OMEGA_BUILD__);
 
   loop.start();
 }
