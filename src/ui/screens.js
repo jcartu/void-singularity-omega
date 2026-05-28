@@ -348,7 +348,7 @@ function rarityVars(rarity) {
 // Base class
 // ---------------------------------------------------------------------------
 
-class BaseScreen {
+export class BaseScreen {
   constructor({ manager, data = {} }) {
     this.manager = manager;
     this.bus = manager.bus;
@@ -807,18 +807,27 @@ export class RunSummaryScreen extends BaseScreen {
 // ---------------------------------------------------------------------------
 
 export const SCREEN_TYPES = Object.freeze({
+  TITLE:   'title',
   UPGRADE: 'upgrade',
   SHOP:    'shop',
   SHIP:    'ship',
   SUMMARY: 'summary',
 });
 
-const SCREEN_CTORS = Object.freeze({
+// Lazy registration so the title module can import BaseScreen from this file
+// without a circular load order. ScreenManager registers TITLE on demand.
+const SCREEN_CTORS = {
   [SCREEN_TYPES.UPGRADE]: UpgradeChoiceScreen,
   [SCREEN_TYPES.SHOP]:    ShopScreen,
   [SCREEN_TYPES.SHIP]:    ShipSelectScreen,
   [SCREEN_TYPES.SUMMARY]: RunSummaryScreen,
-});
+};
+
+/** Register an additional screen type (used by host to wire TitleScreen). */
+export function registerScreen(type, Ctor) {
+  if (typeof type !== 'string' || typeof Ctor !== 'function') return;
+  SCREEN_CTORS[type] = Ctor;
+}
 
 export class ScreenManager {
   /**

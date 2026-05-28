@@ -13,6 +13,7 @@
     "test:perf:matrix": "node tests/perf-matrix.mjs",
     "test:selfplay": "node scripts/selfplay-bot.mjs",
     "test:determinism": "node scripts/determinism-test.mjs",
+    "verify:dist": "node scripts/verify-dist.mjs",
     "audit:opus": "bash scripts/opus-audit.sh"
   },
   "dependencies": {

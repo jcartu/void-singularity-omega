@@ -40,6 +40,7 @@ export function freshSaveData() {
     totalRuns:     0,
     totalDeaths:   0,
     totalWins:     0,
+    ftueComplete:  false,         // SPRINT-09 FTUE — set on first-biome clear / skip
   };
 }
 

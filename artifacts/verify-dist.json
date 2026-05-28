@@ -1,0 +1,97 @@
+{
+  "schema": "omega.verify-dist.report",
+  "version": 1,
+  "timestamp": "2026-05-28T12:20:46.936Z",
+  "distPath": "/home/josh/void-singularity-omega/dist",
+  "budgetGzipMB": 25,
+  "bundle": {
+    "files": 5,
+    "sourcemaps": 4,
+    "rawBytes": 1370641,
+    "gzipBytes": 389861,
+    "rawMaps": 8074827,
+    "rawMB": 1.371,
+    "gzipMB": 0.39,
+    "byExt": {
+      ".js": {
+        "count": 4,
+        "rawMB": 1.369,
+        "gzipMB": 0.389
+      },
+      ".html": {
+        "count": 1,
+        "rawMB": 0.002,
+        "gzipMB": 0.001
+      }
+    },
+    "largest": [
+      {
+        "path": "assets/index-BJkqOuNv.js",
+        "rawKB": 1077.6,
+        "gzKB": 302.2
+      },
+      {
+        "path": "assets/three-D325O3uE.js",
+        "rawKB": 194.5,
+        "gzKB": 51.1
+      },
+      {
+        "path": "assets/KTX2Loader-DGnXaGcn.js",
+        "rawKB": 58.2,
+        "gzKB": 23.7
+      },
+      {
+        "path": "assets/DRACOLoader-Bdk5MxCn.js",
+        "rawKB": 6.5,
+        "gzKB": 2.7
+      },
+      {
+        "path": "index.html",
+        "rawKB": 1.8,
+        "gzKB": 0.9
+      }
+    ]
+  },
+  "smoke": {
+    "ok": true,
+    "failures": [],
+    "probe": {
+      "hasLoop": true,
+      "hasProfiler": true,
+      "hasRenderer": true,
+      "cap": {
+        "webgpu": true,
+        "webgl2": true,
+        "hdr": true,
+        "adapter": {},
+        "tier": "ultra"
+      },
+      "running": false,
+      "traceSchema": "omega.profiler.trace",
+      "fps": 60,
+      "drawCalls": 101,
+      "frame": 92
+    },
+    "pageErrors": [
+      "Instance dropped in popErrorScope",
+      "Instance dropped in popErrorScope"
+    ],
+    "consoleErrors": [
+      "THREE.TSL: TypeError: Cannot read properties of null (reading 'build') \"o()\" at \"index-BJkqOuNv.js:9\"\n    at o (index-BJkqOuNv.js:9:31224)\n    at hC.generate (index-BJkqOuNv.js:9:31585)\n    at hC.build (index-BJkqOuNv.js:9:7853)\n    at hC.build (index-BJkqOuNv.js:9:10976)\n    at oB.build (index-BJkqOuNv.js:34:105465)\n    at XA.build (index-BJkqOuNv.js:9:20758)\n    at Jl.build (index-BJkqOuNv.js:22:2414)\n    at oB.build (index-BJkqOuNv.js:34:105465)\n    at XA.build (index-BJkqOuNv.js:9:20758)\n    at Jl.build (index-BJkqOuNv.js:22:2414)",
+      "THREE.TSL: TypeError: Cannot read properties of null (reading 'build') \"o()\" at \"index-BJkqOuNv.js:9\"\n    at o (index-BJkqOuNv.js:9:31224)\n    at hC.generate (index-BJkqOuNv.js:9:31585)\n    at hC.build (index-BJkqOuNv.js:9:7853)\n    at hC.build (index-BJkqOuNv.js:9:10976)\n    at oB.build (index-BJkqOuNv.js:34:105465)\n    at XA.build (index-BJkqOuNv.js:9:20758)\n    at Jl.build (index-BJkqOuNv.js:22:2414)\n    at oB.build (index-BJkqOuNv.js:34:105465)\n    at XA.build (index-BJkqOuNv.js:9:20758)\n    at Jl.build (index-BJkqOuNv.js:22:2414)"
+    ]
+  },
+  "perf": {
+    "exitCode": 0,
+    "summary": {
+      "fpsAvg": 60.00111111111111,
+      "fpsMin": 59.98,
+      "p99MsMax": 0.25,
+      "heapMBMax": 11.86,
+      "drawCalls": 343,
+      "triangles": 0
+    },
+    "stormVerdict": null
+  },
+  "verdict": "pass"
+}

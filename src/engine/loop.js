@@ -16,6 +16,20 @@ export class Loop {
     this._fpsAcc = 0;
     this._fpsFrames = 0;
     this._tick = this._tick.bind(this);
+    this._paused = false;
+    this._autoPaused = false;
+    this._onVisibility = () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        this.setPaused(true);
+        this._autoPaused = true;
+      } else if (this._autoPaused) {
+        this.setPaused(false);
+        this._autoPaused = false;
+      }
+    };
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', this._onVisibility);
+    }
   }
 
   start() {
@@ -28,12 +42,23 @@ export class Loop {
   stop() {
     this._running = false;
     cancelAnimationFrame(this._raf);
+    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('visibilitychange', this._onVisibility);
+    }
+  }
+
+  setPaused(p) {
+    const next = !!p;
+    if (next === this._paused) return;
+    this._paused = next;
+    if (!next) this._last = performance.now() / 1000;
   }
 
   _tick() {
     if (!this._running) return;
     const now = performance.now() / 1000;
     let frame = now - this._last;
+    if (this._paused) frame = 0;
     this._last = now;
     if (frame > 0.25) frame = 0.25; // clamp spiral-of-death
 

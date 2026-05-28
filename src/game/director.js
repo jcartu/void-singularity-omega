@@ -142,12 +142,16 @@ export class WaveDirector {
    * @param {RNG|{float:Function,range:Function,int:Function,pick:Function}} [deps.rng]
    * @param {{ position: { x:number, z:number } }} [deps.gravity]
    */
-  constructor({ enemies, bus = null, rng = null, gravity = null } = {}) {
+  constructor({ enemies, bus = null, rng = null, gravity = null, budgetMultiplier = null } = {}) {
     if (!enemies) throw new Error('WaveDirector: enemies (EnemyManager) required');
     this.enemies = enemies;
     this.bus = bus;
     this.rng = rng ?? new RNG(0xC0FFEE);
     this.gravity = gravity;
+    // Optional external budget scaler (FTUE difficulty mod). May be a number
+    // or a function returning a number; evaluated lazily so callers can flip
+    // it after construction without touching director internals.
+    this._budgetMul = budgetMultiplier;
 
     // Per-run state.
     this.biomeIndex = 0;
@@ -327,7 +331,14 @@ export class WaveDirector {
     const base = BUDGET_BASE
       + BUDGET_PER_WAVE * globalWave
       + BUDGET_PER_BIOME * this.biomeIndex;
-    return Math.round(base * (isBreather ? BREATHER_BUDGET_MULT : 1.0));
+    let scaled = Math.round(base * (isBreather ? BREATHER_BUDGET_MULT : 1.0));
+    const mul = typeof this._budgetMul === 'function'
+      ? this._budgetMul()
+      : (Number.isFinite(this._budgetMul) ? this._budgetMul : 1);
+    if (Number.isFinite(mul) && mul > 0 && mul !== 1) {
+      scaled = Math.max(1, Math.round(scaled * mul));
+    }
+    return scaled;
   }
 
   _poolForWave(biome, waveIdx) {

@@ -12,6 +12,12 @@ import { PerfGate } from './render/perf-gate.js';
 import { BudgetManager } from './render/budget.js';
 import { AudioCore } from './audio/audio.js';
 import { HitchPrevention } from './engine/hitch-prevention.js';
+import { A11YManager } from './game/a11y.js';
+import { SettingsScreen } from './ui/screens/settings.js';
+import { SaveManager } from './engine/save.js';
+import { Transitions } from './ui/transitions.js';
+import { ScreenManager, SCREEN_TYPES, registerScreen } from './ui/screens.js';
+import { TitleScreen } from './ui/screens/title.js';
 
 const bootEl = document.getElementById('boot');
 const fatalEl = document.getElementById('fatal');
@@ -138,7 +144,48 @@ async function main() {
   world.hitch = hitch;
 
   // Expose for the perf harness + opus capture scripts.
-  window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, budget, audio, hitch, scenarios: { runStorm } };
+  // Accessibility + settings (SPRINT-09). Wired after world/audio/postfx so the
+  // manager has live system references on first apply.
+  const save = new SaveManager();
+  const a11y = new A11YManager({
+    postfx:   world.fx?.fx ?? world.fx,
+    screenFX: world.screenFX ?? null,
+    bus:      world.bus,
+    canvas,
+  });
+  const settings = new SettingsScreen({
+    bus:      world.bus,
+    save,
+    audioCore: audio,
+    postfx:   world.fx?.fx ?? world.fx,
+    screenFX: world.screenFX ?? null,
+    a11y,
+    input,
+    hotkey:   'Comma',  // open with ',' — non-conflicting with O (audio panel)
+  });
+  world.settings = settings;
+  world.a11y = a11y;
+
+  // SPRINT-09 polish: cinematic transitions overlay (fade/flash/shake/biome wash).
+  const transitions = new Transitions({ bus: world.bus });
+  transitions.subscribe(world.bus);
+
+  // SPRINT-09 polish: title screen on an isolated screen manager so it never
+  // collides with the in-run upgrade/shop/summary stack.
+  registerScreen(SCREEN_TYPES.TITLE, TitleScreen);
+  const titleManager = new ScreenManager({ bus: world.bus });
+  let hasSave = false;
+  try { hasSave = !!(save && typeof save.load === 'function' && save.load()); }
+  catch { hasSave = false; }
+  const showTitle = () => titleManager.showScreen(SCREEN_TYPES.TITLE, {
+    hasSave, buildTag: 'SPRINT-09',
+  });
+  world.onFirstFrame?.(() => { try { showTitle(); } catch (e) { console.warn('[OMEGA] title failed', e); } });
+  world.bus?.on?.('title:newrun',   () => { titleManager.hideScreen(); transitions.fadeFromBlack({ ms: 700 }); });
+  world.bus?.on?.('title:continue', () => { titleManager.hideScreen(); transitions.fadeFromBlack({ ms: 700 }); });
+
+  // Expose for the perf harness + opus capture scripts.
+  window.__OMEGA__ = { world, renderer, loop, cap, profiler, perfGate, budget, audio, hitch, settings, a11y, transitions, titleManager, showTitle, scenarios: { runStorm } };
 
   loop.start();
 }

@@ -36,6 +36,8 @@ import { VFXManager } from '../render/vfx.js';
 import { ParticleManager } from '../render/particles.js';
 import { AudioHooks } from './audio-hooks.js';
 import { AssetManager } from '../engine/assets.js';
+import { PauseManager } from './pause.js';
+import { installHardening } from './hardening.js';
 
 // Gravitational constant tuned for arcade feel (not physical).
 const GRAV_K = 320;
@@ -59,6 +61,7 @@ export class World {
     this._firstFrameCbs = [];
     this._framed = false;
     this._firePrev = false;
+    this.pause = new PauseManager({ bus: this.bus });
   }
 
   async init() {
@@ -206,11 +209,23 @@ export class World {
       initialBalance: 0,
     });
     this._unsubKills = this.economy.currency.attachToBus(this.bus);
+    // SaveManager early so the FTUEManager can read ftueComplete before the
+    // director is built (FTUE supplies the director's budgetMultiplier).
+    this.save = new SaveManager();
+    this.ftue = new FTUEManager({
+      bus: this.bus,
+      save: this.save,
+      ship: this.ship,
+      gravity: this.gravitySource,
+    });
     this.director = new WaveDirector({
       enemies: this.enemies,
       bus: this.bus,
       rng: this.rng.fx,
       gravity: this.gravitySource,
+      // FTUE throttles spawn budget during first-time onboarding (returns
+      // 1.0 once ftueComplete is set, so returning players get full pressure).
+      budgetMultiplier: () => (this.ftue ? this.ftue.getDifficultyMod() : 1),
     });
     this.runState = new RunStateMachine({
       ship: this.ship,
@@ -223,7 +238,7 @@ export class World {
       externalBoss: true,
     });
 
-    this.save = new SaveManager();
+    // (SaveManager moved above next to the FTUE construction.)
     this.runEnd = new RunEndManager({
       economy: this.economy,
       save: this.save,
@@ -317,6 +332,7 @@ export class World {
       director: this.director,
       ship: this.ship,
     });
+    this._disposeHardening = installHardening(this, { pause: this.pause });
   }
 
   /**
@@ -383,6 +399,7 @@ export class World {
   }
 
   _updateSim(dt) {
+    if (this.pause && this.pause.paused) return;
     // Hit-feel: consume one freeze frame if any. We still tick render-side
     // bookkeeping with REAL dt below — only the gameplay-systems step gets
     // zeroed. This keeps the loop's fixed-step accumulator honest.
@@ -413,6 +430,7 @@ export class World {
     this.weapons.update(simDt);
     if (this.enemies) this.enemies.update(simDt, performance.now() * 0.001);
     if (this.runState && !this._runPaused) this.runState.update(simDt);
+    if (this.ftue) this.ftue.update(simDt);
     if (this.bossManager && !this._runPaused) {
       this.bossManager.update(simDt, this.ship?.position ?? null);
     }

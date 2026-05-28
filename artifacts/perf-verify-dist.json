@@ -1,0 +1,261 @@
+{
+  "schema": "omega.perf-harness.report",
+  "version": 2,
+  "scenario": "idle",
+  "url": "http://127.0.0.1:33389",
+  "startedAt": "2026-05-28T12:20:42.835Z",
+  "durationMs": 4000,
+  "warmupMs": 1500,
+  "samples": [
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970842837,
+      "sampleWindow": 91,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 91,
+        "fps": 60,
+        "frameMs": 0.015,
+        "avgMs": 0.028,
+        "p50Ms": 0.02,
+        "p99Ms": 0.25,
+        "drawCalls": 100,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 9.79,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970843344,
+      "sampleWindow": 122,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 122,
+        "fps": 60,
+        "frameMs": 0.02,
+        "avgMs": 0.026,
+        "p50Ms": 0.02,
+        "p99Ms": 0.245,
+        "drawCalls": 131,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 11.04,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970843849,
+      "sampleWindow": 152,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 152,
+        "fps": 60,
+        "frameMs": 0.02,
+        "avgMs": 0.025,
+        "p50Ms": 0.02,
+        "p99Ms": 0.245,
+        "drawCalls": 161,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 9.06,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970844360,
+      "sampleWindow": 183,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 183,
+        "fps": 60.01,
+        "frameMs": 0.02,
+        "avgMs": 0.025,
+        "p50Ms": 0.02,
+        "p99Ms": 0.245,
+        "drawCalls": 192,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 11.37,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970844863,
+      "sampleWindow": 213,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 213,
+        "fps": 60,
+        "frameMs": 0.03,
+        "avgMs": 0.024,
+        "p50Ms": 0.02,
+        "p99Ms": 0.16,
+        "drawCalls": 222,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 9.57,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970845367,
+      "sampleWindow": 243,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 243,
+        "fps": 59.98,
+        "frameMs": 0.015,
+        "avgMs": 0.023,
+        "p50Ms": 0.02,
+        "p99Ms": 0.16,
+        "drawCalls": 252,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 10.83,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970845870,
+      "sampleWindow": 273,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 273,
+        "fps": 60.02,
+        "frameMs": 0.02,
+        "avgMs": 0.023,
+        "p50Ms": 0.02,
+        "p99Ms": 0.16,
+        "drawCalls": 282,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 9.16,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970846372,
+      "sampleWindow": 303,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 303,
+        "fps": 60,
+        "frameMs": 0.035,
+        "avgMs": 0.023,
+        "p50Ms": 0.02,
+        "p99Ms": 0.05,
+        "drawCalls": 312,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 10.47,
+        "heapLimitMB": 4096
+      }
+    },
+    {
+      "schema": "omega.profiler.trace",
+      "version": 1,
+      "timestamp": 1779970846876,
+      "sampleWindow": 334,
+      "capability": {
+        "webgpu": true,
+        "webgl2": true,
+        "tier": "ultra"
+      },
+      "metrics": {
+        "frame": 334,
+        "fps": 60,
+        "frameMs": 0.015,
+        "avgMs": 0.022,
+        "p50Ms": 0.02,
+        "p99Ms": 0.05,
+        "drawCalls": 343,
+        "triangles": 0,
+        "programs": 0,
+        "heapMB": 11.86,
+        "heapLimitMB": 4096
+      }
+    }
+  ],
+  "final": {
+    "schema": "omega.profiler.trace",
+    "version": 1,
+    "timestamp": 1779970846876,
+    "sampleWindow": 334,
+    "capability": {
+      "webgpu": true,
+      "webgl2": true,
+      "tier": "ultra"
+    },
+    "metrics": {
+      "frame": 334,
+      "fps": 60,
+      "frameMs": 0.015,
+      "avgMs": 0.022,
+      "p50Ms": 0.02,
+      "p99Ms": 0.05,
+      "drawCalls": 343,
+      "triangles": 0,
+      "programs": 0,
+      "heapMB": 11.86,
+      "heapLimitMB": 4096
+    }
+  },
+  "summary": {
+    "fpsAvg": 60.00111111111111,
+    "fpsMin": 59.98,
+    "p99MsMax": 0.25,
+    "heapMBMax": 11.86,
+    "drawCalls": 343,
+    "triangles": 0
+  },
+  "storm": null,
+  "postfx": null
+}
